@@ -5,14 +5,15 @@ fn main() {
     println!("Hello, world!");
 }
 
-struct Machine<R: io::Read> {
+struct Machine<R: io::Read, W: io::Write> {
     ram: [u8; 4096],
     sp: i16,
     pc: i16,
     input: R,
+    output: W,
 }
 
-impl<R: io::Read> Machine<R> {
+impl<R: io::Read, W: io::Write> Machine<R, W> {
     pub fn load(&mut self, program: &[u8]) -> Result<(), &'static str> {
         if [0xde, 0xad, 0xbe, 0xef] != program[0..4] {
             // Magic didn't match, bail early
@@ -26,18 +27,22 @@ impl<R: io::Read> Machine<R> {
         Ok(())
     }
 
-    pub fn run(&mut self) -> Result<(), &'static str> {
+    pub fn run(&mut self) -> Result<u8, &'static str> {
         // If the instruction does not explicitly move the PC you can just perform the action.
         // If an instruction needs to explicitly move the PC you should:
         // 1. Calculate the new PC
         // 2. Perform any action
         // 3. Set the correct PC value
         // 4. Call `continue` to avoid the 4 byte step at the bottom of the loop
+        let exit_code;
         loop {
             let instruction = self.fetch();
 
             match instruction {
-                Instruction::Exit(_) => break,
+                Instruction::Exit(code) => {
+                    exit_code = code;
+                    break;
+                }
                 Instruction::Swap(from, to) => {
                     let from_word = u32::from_be_bytes(
                         <[u8; 4]>::try_from(
@@ -76,7 +81,36 @@ impl<R: io::Read> Machine<R> {
 
                     self.push(word)?;
                 }
-                Instruction::Stinput(_) => todo!(),
+                Instruction::Stinput(max_chars) => {
+                    let mut s = self.read_line()?;
+                    s = s.trim().to_string();
+
+                    s.truncate(max_chars as usize);
+
+                    if s.len() % 3 != 0 {
+                        let count = 3 - (s.len() % 3);
+                        for _i in 0..count {
+                            s.push(1 as u8 as char);
+                        }
+                    }
+
+                    let reversed = s.chars().into_iter().rev().collect::<String>();
+
+                    let push_count = reversed.len() / 3;
+
+                    let s_bytes = reversed.as_bytes();
+                    for i in 0..push_count {
+                        let mut word: u32 = ((s_bytes[i * 3] as u32) << 16)
+                            | ((s_bytes[i * 3 + 1] as u32) << 8)
+                            | (s_bytes[i * 3 + 2] as u32);
+
+                        if i != 0 {
+                            word |= 0x1 << 24;
+                        }
+
+                        self.push(word)?;
+                    }
+                }
                 Instruction::Debug(_) => todo!(),
                 Instruction::Pop(_) => todo!(),
                 Instruction::Add() => todo!(),
@@ -115,7 +149,7 @@ impl<R: io::Read> Machine<R> {
             self.step();
         }
 
-        Ok(())
+        Ok(exit_code)
     }
 
     fn step(&mut self) {
@@ -293,6 +327,7 @@ mod tests {
             sp: 4095,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
+            output: io::Cursor::new(Vec::new()),
         };
 
         let program = &[
@@ -305,12 +340,13 @@ mod tests {
     }
 
     #[test]
-    fn run_machine() {
+    fn test_input() {
         let mut machine = Machine {
             ram: [0; 4096],
             sp: 4095,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
+            output: io::Cursor::new(Vec::new()),
         };
 
         let program = &[0xde, 0xad, 0xbe, 0xef, 0x04, 0x00, 0x00, 0x00];
@@ -328,5 +364,39 @@ mod tests {
         let bytes = <[u8; 4]>::try_from(&machine.ram[4092..=4095]).unwrap();
         let word = u32::from_be_bytes(bytes);
         assert_eq!(word, input)
+    }
+
+    #[test]
+    fn test_stinput() {
+        let mut machine = Machine {
+            ram: [0; 4096],
+            sp: 4095,
+            pc: 0,
+            input: io::Cursor::new(Vec::new()),
+            output: io::Cursor::new(Vec::new()),
+        };
+
+        let program = &[0xde, 0xad, 0xbe, 0xef, 0x05, 0x00, 0x00, 0xFF];
+
+        machine
+            .input
+            .get_mut()
+            .write(format!("Hello World!").as_bytes())
+            .unwrap();
+
+        machine.load(program).unwrap();
+        machine.run().unwrap();
+
+        let bytes = <[u8; 16]>::try_from(&machine.ram[4080..=4095]).unwrap();
+
+        // This weird array is the string in reverse order, grouped into triplets,
+        // and padded with 0/1 depending on if we're at the end of the string
+        assert_eq!(
+            &[
+                0x01, b'l', b'e', b'H', 0x01, b' ', b'o', b'l', 0x01, b'r', b'o', b'W', 0x00, b'!',
+                b'd', b'l'
+            ],
+            &bytes
+        );
     }
 }
