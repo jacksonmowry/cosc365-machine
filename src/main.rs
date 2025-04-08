@@ -2,7 +2,26 @@ use std::io;
 use std::io::Write;
 
 fn main() {
-    println!("Hello, world!");
+    // Just an example of it working for now, this will obv change to accept a real file
+    let mut machine = Machine {
+        ram: [0; 1024],
+        sp: 1024,
+        pc: 0,
+        input: io::stdin(),
+        output: io::stdout(),
+    };
+
+    let binary = include_bytes!("../marz/stinput.v");
+
+    // This takes the [u8] that is the file, chunks it into quads,
+    // then returns an array of u32 values
+    let program: Vec<_> = binary
+        .chunks(4)
+        .map(|x| u32::from_le_bytes(<[u8; 4]>::try_from(x).unwrap()))
+        .collect();
+
+    machine.load(&program).unwrap();
+    machine.run().unwrap();
 }
 
 struct Machine<R: io::Read, W: io::Write> {
@@ -36,9 +55,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
         // 4. Call `continue` to avoid the 4 byte step at the bottom of the loop
         let exit_code;
         loop {
-            println!("PC: {}", self.pc);
             let instruction = self.fetch();
-            println!("Instruction: {:?}", instruction);
 
             match instruction {
                 Instruction::Exit(code) => {
@@ -143,6 +160,8 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                         actual_offset += 1;
                     }
+
+                    self.output.flush().unwrap();
                 }
                 Instruction::Call(_) => todo!(),
                 Instruction::Return(_) => todo!(),
@@ -547,6 +566,8 @@ mod tests {
 
         let binary = include_bytes!("../marz/stinput.v");
 
+        // This takes the [u8] that is the file, chunks it into quads,
+        // then returns an array of u32 values
         let program: Vec<_> = binary
             .chunks(4)
             .map(|x| u32::from_le_bytes(<[u8; 4]>::try_from(x).unwrap()))
