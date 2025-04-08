@@ -1,5 +1,4 @@
 use std::io;
-use std::io::Read;
 use std::io::Write;
 
 fn main() {
@@ -113,7 +112,12 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     }
                 }
                 Instruction::Debug(_) => todo!(),
-                Instruction::Pop(_) => todo!(),
+                Instruction::Pop(offset) => {
+                    self.sp += offset as i16;
+                    if self.sp >= 4096 {
+                        self.sp = 4095;
+                    }
+                }
                 Instruction::Add() => todo!(),
                 Instruction::Sub() => todo!(),
                 Instruction::Mul() => todo!(),
@@ -159,7 +163,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::Dup(_) => todo!(),
                 Instruction::Print(_, _) => todo!(),
                 Instruction::Dump() => todo!(),
-                Instruction::Push(_) => todo!(),
+                Instruction::Push(val) => self.push(val).unwrap(),
             }
 
             self.step();
@@ -214,7 +218,11 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     _ => unreachable!("Not a valid func4 for Opcode 0 ({})", func4),
                 }
             }
-            Opcode::Pop => todo!(),
+            Opcode::Pop => {
+                let offset = instruction & 0xFFFFFFF;
+
+                Instruction::Pop(offset)
+            }
             Opcode::BinaryArithmetic => todo!(),
             Opcode::UnaryArithmetic => todo!(),
             Opcode::StringPrint => {
@@ -230,7 +238,11 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
             Opcode::Dup => todo!(),
             Opcode::Print => todo!(),
             Opcode::Dump => todo!(),
-            Opcode::Push => todo!(),
+            Opcode::Push => {
+                let val = instruction & 0xFFFFFFF;
+
+                Instruction::Push(val)
+            }
         }
     }
 
@@ -302,7 +314,7 @@ enum Instruction {
     Input(),
     Stinput(u32),
     Debug(u32),
-    Pop(i32),
+    Pop(u32),
     Add(),
     Sub(),
     Mul(),
@@ -446,5 +458,47 @@ mod tests {
         let output = machine.output.clone().into_inner();
 
         assert_eq!("Hello World!", String::from_utf8(output).unwrap());
+    }
+
+    #[test]
+    fn test_push() {
+        let mut machine = Machine {
+            ram: [0; 4096],
+            sp: 4095,
+            pc: 0,
+            input: io::Cursor::new(Vec::new()),
+            output: io::Cursor::new(Vec::new()),
+        };
+
+        let program = &[0xde, 0xad, 0xbe, 0xef, 0xF0, 0x00, 0x00, 0x45];
+
+        machine.load(program).unwrap();
+        machine.run().unwrap();
+
+        let bytes = <[u8; 4]>::try_from(&machine.ram[4092..=4095]).unwrap();
+        let word = i32::from_be_bytes(bytes);
+
+        assert_eq!(0x45, word);
+        assert_eq!(4091, machine.sp);
+    }
+
+    #[test]
+    fn test_pop() {
+        let mut machine = Machine {
+            ram: [0; 4096],
+            sp: 4095,
+            pc: 0,
+            input: io::Cursor::new(Vec::new()),
+            output: io::Cursor::new(Vec::new()),
+        };
+
+        let program = &[
+            0xde, 0xad, 0xbe, 0xef, 0xF0, 0x00, 0x00, 0x45, 0x10, 0x00, 0x00, 0x04,
+        ];
+
+        machine.load(program).unwrap();
+        machine.run().unwrap();
+
+        assert_eq!(4095, machine.sp);
     }
 }
