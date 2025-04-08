@@ -1,23 +1,25 @@
-use std::io::stdin;
+use std::io;
+use std::io::Write;
 
 fn main() {
     println!("Hello, world!");
 }
 
-struct Machine {
+struct Machine<R: io::Read> {
     ram: [u8; 4096],
     sp: i16,
     pc: i16,
+    input: R,
 }
 
-impl Machine {
+impl<R: io::Read> Machine<R> {
     pub fn load(&mut self, program: &[u8]) -> Result<(), &'static str> {
         if [0xde, 0xad, 0xbe, 0xef] != program[0..4] {
             // Magic didn't match, bail early
             return Err("Magic didn't match 0xdeadbeef");
         }
 
-        self.ram[0..].clone_from_slice(&program[4..]);
+        self.ram[0..program.len() - 4].clone_from_slice(&program[4..]);
         self.sp = 4095;
         self.pc = 0;
 
@@ -55,17 +57,24 @@ impl Machine {
                 }
                 Instruction::Nop() => (),
                 Instruction::Input() => {
-                    let mut s = String::new();
-                    stdin().read_line(&mut s).unwrap();
+                    let s = self.read_line()?;
+                    let word: u32;
 
                     if s.starts_with("0x") || s.starts_with("0X") {
                         // Parse Hex
-
+                        word = u32::from_str_radix(&s.trim()[2..], 16)
+                            .expect("Unable to parse hex literal");
                     } else if s.starts_with("0b") || s.starts_with("0B") {
                         // Parse Binary
+                        word = u32::from_str_radix(&s.trim()[2..], 2)
+                            .expect("Unable to parse binary literal");
                     } else {
                         // Parse Decimal
+                        word =
+                            u32::from_str_radix(&s, 10).expect("Unable to parse decimal literal");
                     }
+
+                    self.push(word)?;
                 }
                 Instruction::Stinput(_) => todo!(),
                 Instruction::Debug(_) => todo!(),
@@ -117,6 +126,19 @@ impl Machine {
         self.pc += step
     }
 
+    fn push(&mut self, word: u32) -> Result<(), &'static str> {
+        let bytes = word.to_be_bytes();
+
+        if self.sp < 4 {
+            return Err("No room left on stack");
+        }
+
+        self.ram[self.sp as usize - 3..=self.sp as usize].copy_from_slice(&bytes);
+        self.sp -= 4;
+
+        Ok(())
+    }
+
     // Does not move the program counter, use `step` to move the program counter
     // This is so we don't have to step backwards when using PC-relative offsets
     fn fetch(&self) -> Instruction {
@@ -156,6 +178,26 @@ impl Machine {
             Opcode::Dump => todo!(),
             Opcode::Push => todo!(),
         }
+    }
+
+    fn read_line(&mut self) -> Result<String, &'static str> {
+        let mut s = String::new();
+        let mut buf = [0; 1];
+
+        loop {
+            let read = self.input.read(&mut buf[..]).unwrap();
+            if read == 0 {
+                break;
+            }
+
+            if buf[0] as char == '\n' || buf[0] as char == '\0' {
+                break;
+            }
+
+            s.push(buf[0] as char);
+        }
+
+        Ok(s)
     }
 }
 
@@ -198,6 +240,7 @@ impl Opcode {
     }
 }
 
+#[derive(Debug)]
 enum Instruction {
     Exit(u8),
     Swap(i16, i16),
@@ -237,4 +280,53 @@ enum Instruction {
     Print(i32, i8),
     Dump(),
     Push(u32),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn construct_machine() {
+        let mut machine = Machine {
+            ram: [0; 4096],
+            sp: 4095,
+            pc: 0,
+            input: io::Cursor::new(Vec::new()),
+        };
+
+        let program = &[
+            0xde, 0xad, 0xbe, 0xef, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        machine.load(program).unwrap();
+
+        assert_eq!(machine.ram[..program.len() - 4], program[4..]);
+    }
+
+    #[test]
+    fn run_machine() {
+        let mut machine = Machine {
+            ram: [0; 4096],
+            sp: 4095,
+            pc: 0,
+            input: io::Cursor::new(Vec::new()),
+        };
+
+        let program = &[0xde, 0xad, 0xbe, 0xef, 0x04, 0x00, 0x00, 0x00];
+
+        let input: u32 = 0x45;
+        machine
+            .input
+            .get_mut()
+            .write(format!("{:#x}", input).as_bytes())
+            .unwrap();
+
+        machine.load(program).unwrap();
+        machine.run().unwrap();
+
+        let bytes = <[u8; 4]>::try_from(&machine.ram[4092..=4095]).unwrap();
+        let word = u32::from_be_bytes(bytes);
+        assert_eq!(word, input)
+    }
 }
