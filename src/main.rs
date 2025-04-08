@@ -15,7 +15,7 @@ struct Machine<R: io::Read, W: io::Write> {
 
 impl<R: io::Read, W: io::Write> Machine<R, W> {
     pub fn load(&mut self, program: &[u32]) -> Result<(), &'static str> {
-        if 0xdead_beef != program[0] {
+        if 0xefbe_adde != program[0] {
             // Magic didn't match, bail early
             return Err("Magic didn't match 0xdeadbeef");
         }
@@ -36,7 +36,9 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
         // 4. Call `continue` to avoid the 4 byte step at the bottom of the loop
         let exit_code;
         loop {
+            println!("PC: {}", self.pc);
             let instruction = self.fetch();
+            println!("Instruction: {:?}", instruction);
 
             match instruction {
                 Instruction::Exit(code) => {
@@ -125,9 +127,15 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                     loop {
                         let bytes = &self.ram[actual_offset].to_be_bytes();
-                        self.output.write(&bytes[3..4]).unwrap();
-                        self.output.write(&bytes[2..3]).unwrap();
-                        self.output.write(&bytes[1..2]).unwrap();
+                        if bytes[3] != 1 {
+                            self.output.write(&bytes[3..4]).unwrap();
+                        }
+                        if bytes[2] != 1 {
+                            self.output.write(&bytes[2..3]).unwrap();
+                        }
+                        if bytes[1] != 1 {
+                            self.output.write(&bytes[1..2]).unwrap();
+                        }
 
                         if actual_offset == 0 || bytes[0] == 0 {
                             break;
@@ -145,7 +153,12 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::IfGt(_) => todo!(),
                 Instruction::IfLe(_) => todo!(),
                 Instruction::IfGe(_) => todo!(),
-                Instruction::EqZero(_) => todo!(),
+                Instruction::EqZero(offset) => {
+                    if self.ram[self.sp as usize] == 0 {
+                        self.pc += offset as i16;
+                        continue;
+                    }
+                }
                 Instruction::NeZero(_) => todo!(),
                 Instruction::LtZero(_) => todo!(),
                 Instruction::GeZero(_) => todo!(),
@@ -219,7 +232,23 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
             Opcode::Return => todo!(),
             Opcode::Goto => todo!(),
             Opcode::BinaryIf => todo!(),
-            Opcode::UnaryIf => todo!(),
+            Opcode::UnaryIf => {
+                let func2 = (instruction >> 25) & 0b11;
+                let mut offset = instruction as i32 & 0xffffff;
+
+                if offset >> 23 == 1 {
+                    let mask = 0xff << 24;
+                    offset |= mask;
+                }
+
+                match func2 {
+                    0b00 => Instruction::EqZero(offset),
+                    0b01 => Instruction::NeZero(offset),
+                    0b10 => Instruction::LtZero(offset),
+                    0b11 => Instruction::GeZero(offset),
+                    _ => unreachable!("No unary if with this func2"),
+                }
+            }
             Opcode::Dup => todo!(),
             Opcode::Print => todo!(),
             Opcode::Dump => todo!(),
@@ -292,7 +321,7 @@ impl Opcode {
             13 => Self::Print,
             14 => Self::Dump,
             15 => Self::Push,
-            _ => unreachable!(),
+            _ => unreachable!("I got {} which is not a valid opcode", val),
         }
     }
 }
@@ -504,5 +533,37 @@ mod tests {
         machine.run().unwrap();
 
         assert_eq!(1024, machine.sp);
+    }
+
+    #[test]
+    fn test_stinput_marz() {
+        let mut machine = Machine {
+            ram: [0; 1024],
+            sp: 1024,
+            pc: 0,
+            input: io::Cursor::new(Vec::new()),
+            output: io::Cursor::new(Vec::new()),
+        };
+
+        let binary = include_bytes!("../marz/stinput.v");
+
+        let program: Vec<_> = binary
+            .chunks(4)
+            .map(|x| u32::from_le_bytes(<[u8; 4]>::try_from(x).unwrap()))
+            .collect();
+
+        machine
+            .input
+            .get_mut()
+            .write(format!("Hii\n").as_bytes())
+            .unwrap();
+
+        machine.load(&program).unwrap();
+        machine.run().unwrap();
+
+        let output = machine.output.clone().into_inner();
+        let output_str = String::from_utf8(output).unwrap();
+
+        assert_eq!("Enter a string: You wrote = 'Hii'\n", output_str);
     }
 }
