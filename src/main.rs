@@ -1,4 +1,5 @@
 use std::io;
+use std::io::Read;
 use std::io::Write;
 
 fn main() {
@@ -126,7 +127,22 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::Asr() => todo!(),
                 Instruction::Neg() => todo!(),
                 Instruction::Not() => todo!(),
-                Instruction::Stprint(_) => todo!(),
+                Instruction::Stprint(offset) => {
+                    let mut actual_offset = (self.sp + offset as i16) as usize;
+
+                    loop {
+                        let bytes = &self.ram[actual_offset - 3..=actual_offset];
+                        self.output.write(&bytes[3..4]).unwrap();
+                        self.output.write(&bytes[2..3]).unwrap();
+                        self.output.write(&bytes[1..2]).unwrap();
+
+                        if actual_offset == 0 || bytes[0] == 0 {
+                            break;
+                        }
+
+                        actual_offset += 4;
+                    }
+                }
                 Instruction::Call(_) => todo!(),
                 Instruction::Return(_) => todo!(),
                 Instruction::Goto(_) => todo!(),
@@ -201,7 +217,11 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
             Opcode::Pop => todo!(),
             Opcode::BinaryArithmetic => todo!(),
             Opcode::UnaryArithmetic => todo!(),
-            Opcode::StringPrint => todo!(),
+            Opcode::StringPrint => {
+                let offset = instruction & 0xFFFFFFF;
+
+                Instruction::Stprint(offset as i32)
+            }
             Opcode::Call => todo!(),
             Opcode::Return => todo!(),
             Opcode::Goto => todo!(),
@@ -398,5 +418,33 @@ mod tests {
             ],
             &bytes
         );
+    }
+
+    #[test]
+    fn test_stprint() {
+        let mut machine = Machine {
+            ram: [0; 4096],
+            sp: 4095,
+            pc: 0,
+            input: io::Cursor::new(Vec::new()),
+            output: io::Cursor::new(Vec::new()),
+        };
+
+        let program = &[
+            0xde, 0xad, 0xbe, 0xef, 0x05, 0x00, 0x00, 0xFF, 0x40, 0x00, 0x00, 0x04,
+        ];
+
+        machine
+            .input
+            .get_mut()
+            .write(format!("Hello World!").as_bytes())
+            .unwrap();
+
+        machine.load(program).unwrap();
+        machine.run().unwrap();
+
+        let output = machine.output.clone().into_inner();
+
+        assert_eq!("Hello World!", String::from_utf8(output).unwrap());
     }
 }
