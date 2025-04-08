@@ -4,20 +4,122 @@ fn main() {
 
 struct Machine {
     ram: [u8; 4096],
-    sp: usize,
-    pc: usize,
+    sp: i16,
+    pc: i16,
 }
 
 impl Machine {
+    pub fn load(&mut self, program: &[u8]) -> Result<(), &'static str> {
+        if [0xde, 0xad, 0xbe, 0xef] != program[0..4] {
+            // Magic didn't match, bail early
+            return Err("Magic didn't match 0xdeadbeef");
+        }
+
+        self.ram[0..].clone_from_slice(&program[4..]);
+        self.sp = 4095;
+        self.pc = 0;
+
+        Ok(())
+    }
+
+    pub fn run(&mut self) -> Result<(), &'static str> {
+        loop {
+            let instruction = self.fetch();
+
+            match instruction {
+                Instruction::Exit(_) => break,
+                Instruction::Swap(from, to) => {
+                    let from_word = u32::from_be_bytes(
+                        <[u8; 4]>::try_from(
+                            &self.ram[(from << 2) as usize..(from << 2) as usize + 4],
+                        )
+                        .unwrap(),
+                    );
+                    let to_word = u32::from_be_bytes(
+                        <[u8; 4]>::try_from(&self.ram[(to << 2) as usize..(to << 2) as usize + 4])
+                            .unwrap(),
+                    );
+
+                    self.ram[(from << 2) as usize..(from << 2) as usize + 4]
+                        .copy_from_slice(&to_word.to_be_bytes());
+                    self.ram[(to << 2) as usize..(to << 2) as usize + 4]
+                        .copy_from_slice(&from_word.to_be_bytes());
+                }
+                Instruction::Nop() => (),
+                Instruction::Input() => todo!(),
+                Instruction::Stinput(_) => todo!(),
+                Instruction::Debug(_) => todo!(),
+                Instruction::Pop(_) => todo!(),
+                Instruction::Add() => todo!(),
+                Instruction::Sub() => todo!(),
+                Instruction::Mul() => todo!(),
+                Instruction::Div() => todo!(),
+                Instruction::Rem() => todo!(),
+                Instruction::And() => todo!(),
+                Instruction::Or() => todo!(),
+                Instruction::Xor() => todo!(),
+                Instruction::Lsl() => todo!(),
+                Instruction::Lsr() => todo!(),
+                Instruction::Asr() => todo!(),
+                Instruction::Neg() => todo!(),
+                Instruction::Not() => todo!(),
+                Instruction::Stprint(_) => todo!(),
+                Instruction::Call(_) => todo!(),
+                Instruction::Return(_) => todo!(),
+                Instruction::Goto(_) => todo!(),
+                Instruction::IfEq(_) => todo!(),
+                Instruction::IfNe(_) => todo!(),
+                Instruction::IfLt(_) => todo!(),
+                Instruction::IfGt(_) => todo!(),
+                Instruction::IfLe(_) => todo!(),
+                Instruction::IfGe(_) => todo!(),
+                Instruction::EqZero(_) => todo!(),
+                Instruction::NeZero(_) => todo!(),
+                Instruction::LtZero(_) => todo!(),
+                Instruction::GeZero(_) => todo!(),
+                Instruction::Dup(_) => todo!(),
+                Instruction::Print(_, _) => todo!(),
+                Instruction::Dump() => todo!(),
+                Instruction::Push(_) => todo!(),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn step(&mut self) {
+        self.move_pc(4)
+    }
+
+    fn move_pc(&mut self, step: i16) {
+        self.pc += step
+    }
+
     // Does not move the program counter, use `step` to move the program counter
     // This is so we don't have to step backwards when using PC-relative offsets
-    pub fn fetch(&self) -> Instruction {
-        let instruction_bytes = <[u8; 4]>::try_from(&self.ram[self.pc..self.pc + 4]).unwrap();
+    fn fetch(&self) -> Instruction {
+        let instruction_bytes =
+            <[u8; 4]>::try_from(&self.ram[self.pc as usize..self.pc as usize + 4]).unwrap();
         let instruction = u32::from_be_bytes(instruction_bytes);
         let opcode = Opcode::from_integer(((instruction >> 28) & 0xf) as u8);
 
         match opcode {
-            Opcode::Miscellaneous => {}
+            Opcode::Miscellaneous => {
+                let func4 = (instruction >> 24) & 0xf;
+
+                match func4 {
+                    0b0000 => Instruction::Exit(instruction as u8 & 0xf),
+                    0b0001 => Instruction::Swap(
+                        (instruction >> 12) as i16 & 0xFFF,
+                        instruction as i16 & 0xFFF,
+                    ),
+                    0b0010 => Instruction::Nop(),
+                    0b0100 => Instruction::Input(),
+                    0b0101 => Instruction::Stinput(instruction & 0xFFFFFF),
+                    0b1111 => Instruction::Debug(instruction & 0xFFFFFF),
+                    _ => unreachable!("Not a valid func4 for Opcode 0 ({})", func4),
+                }
+            }
             Opcode::Pop => todo!(),
             Opcode::BinaryArithmetic => todo!(),
             Opcode::UnaryArithmetic => todo!(),
@@ -32,8 +134,6 @@ impl Machine {
             Opcode::Dump => todo!(),
             Opcode::Push => todo!(),
         }
-
-        return Instruction::Nop();
     }
 }
 
