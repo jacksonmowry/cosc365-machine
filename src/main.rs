@@ -6,7 +6,7 @@ fn main() {
 }
 
 struct Machine<R: io::Read, W: io::Write> {
-    ram: [u8; 4096],
+    ram: [u32; 1024],
     sp: i16,
     pc: i16,
     input: R,
@@ -14,14 +14,14 @@ struct Machine<R: io::Read, W: io::Write> {
 }
 
 impl<R: io::Read, W: io::Write> Machine<R, W> {
-    pub fn load(&mut self, program: &[u8]) -> Result<(), &'static str> {
-        if [0xde, 0xad, 0xbe, 0xef] != program[0..4] {
+    pub fn load(&mut self, program: &[u32]) -> Result<(), &'static str> {
+        if 0xdead_beef != program[0] {
             // Magic didn't match, bail early
             return Err("Magic didn't match 0xdeadbeef");
         }
 
-        self.ram[0..program.len() - 4].clone_from_slice(&program[4..]);
-        self.sp = 4095;
+        self.ram[0..program.len() - 1].clone_from_slice(&program[1..]);
+        self.sp = 1024;
         self.pc = 0;
 
         Ok(())
@@ -44,21 +44,10 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     break;
                 }
                 Instruction::Swap(from, to) => {
-                    let from_word = u32::from_be_bytes(
-                        <[u8; 4]>::try_from(
-                            &self.ram[(from << 2) as usize..(from << 2) as usize + 4],
-                        )
-                        .unwrap(),
-                    );
-                    let to_word = u32::from_be_bytes(
-                        <[u8; 4]>::try_from(&self.ram[(to << 2) as usize..(to << 2) as usize + 4])
-                            .unwrap(),
-                    );
-
-                    self.ram[(from << 2) as usize..(from << 2) as usize + 4]
-                        .copy_from_slice(&to_word.to_be_bytes());
-                    self.ram[(to << 2) as usize..(to << 2) as usize + 4]
-                        .copy_from_slice(&from_word.to_be_bytes());
+                    let tmp = self.ram[(self.sp + (from >> 2)) as usize];
+                    self.ram[(self.sp + (from >> 2)) as usize] =
+                        self.ram[(self.sp + (to >> 2)) as usize];
+                    self.ram[(self.sp + (to >> 2)) as usize] = tmp;
                 }
                 Instruction::Nop() => (),
                 Instruction::Input() => {
@@ -113,9 +102,9 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 }
                 Instruction::Debug(_) => todo!(),
                 Instruction::Pop(offset) => {
-                    self.sp += offset as i16;
-                    if self.sp >= 4096 {
-                        self.sp = 4095;
+                    self.sp += offset as i16 >> 2;
+                    if self.sp >= 1024 {
+                        self.sp = 1024;
                     }
                 }
                 Instruction::Add() => todo!(),
@@ -132,10 +121,10 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::Neg() => todo!(),
                 Instruction::Not() => todo!(),
                 Instruction::Stprint(offset) => {
-                    let mut actual_offset = (self.sp + offset as i16) as usize;
+                    let mut actual_offset = (self.sp + ((offset as i16) >> 2)) as usize;
 
                     loop {
-                        let bytes = &self.ram[actual_offset - 3..=actual_offset];
+                        let bytes = &self.ram[actual_offset].to_be_bytes();
                         self.output.write(&bytes[3..4]).unwrap();
                         self.output.write(&bytes[2..3]).unwrap();
                         self.output.write(&bytes[1..2]).unwrap();
@@ -144,7 +133,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                             break;
                         }
 
-                        actual_offset += 4;
+                        actual_offset += 1;
                     }
                 }
                 Instruction::Call(_) => todo!(),
@@ -173,7 +162,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
     }
 
     fn step(&mut self) {
-        self.move_pc(4)
+        self.move_pc(1)
     }
 
     fn move_pc(&mut self, step: i16) {
@@ -181,14 +170,12 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
     }
 
     fn push(&mut self, word: u32) -> Result<(), &'static str> {
-        let bytes = word.to_be_bytes();
-
-        if self.sp < 4 {
+        if self.sp <= 0 {
             return Err("No room left on stack");
         }
 
-        self.ram[self.sp as usize - 3..=self.sp as usize].copy_from_slice(&bytes);
-        self.sp -= 4;
+        self.sp -= 1;
+        self.ram[self.sp as usize] = word;
 
         Ok(())
     }
@@ -196,9 +183,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
     // Does not move the program counter, use `step` to move the program counter
     // This is so we don't have to step backwards when using PC-relative offsets
     fn fetch(&self) -> Instruction {
-        let instruction_bytes =
-            <[u8; 4]>::try_from(&self.ram[self.pc as usize..self.pc as usize + 4]).unwrap();
-        let instruction = u32::from_be_bytes(instruction_bytes);
+        let instruction = self.ram[self.pc as usize];
         let opcode = Opcode::from_integer(((instruction >> 28) & 0xf) as u8);
 
         match opcode {
@@ -272,6 +257,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
     }
 }
 
+#[derive(Debug)]
 enum Opcode {
     Miscellaneous = 0b0000,
     Pop = 0b0001,
@@ -360,33 +346,31 @@ mod tests {
     #[test]
     fn construct_machine() {
         let mut machine = Machine {
-            ram: [0; 4096],
-            sp: 4095,
+            ram: [0; 1024],
+            sp: 1024,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[
-            0xde, 0xad, 0xbe, 0xef, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ];
+        let program = &[0xdead_beef, 0x0005_0000, 0x0000_0000];
 
         machine.load(program).unwrap();
 
-        assert_eq!(machine.ram[..program.len() - 4], program[4..]);
+        assert_eq!(machine.ram[..program.len() - 1], program[1..]);
     }
 
     #[test]
     fn test_input() {
         let mut machine = Machine {
-            ram: [0; 4096],
-            sp: 4095,
+            ram: [0; 1024],
+            sp: 1024,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xde, 0xad, 0xbe, 0xef, 0x04, 0x00, 0x00, 0x00];
+        let program = &[0xdead_beef, 0x0400_0000];
 
         let input: u32 = 0x45;
         machine
@@ -398,58 +382,53 @@ mod tests {
         machine.load(program).unwrap();
         machine.run().unwrap();
 
-        let bytes = <[u8; 4]>::try_from(&machine.ram[4092..=4095]).unwrap();
-        let word = u32::from_be_bytes(bytes);
+        let word = machine.ram[machine.sp as usize];
         assert_eq!(word, input)
     }
 
     #[test]
     fn test_stinput() {
         let mut machine = Machine {
-            ram: [0; 4096],
-            sp: 4095,
+            ram: [0; 1024],
+            sp: 1024,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xde, 0xad, 0xbe, 0xef, 0x05, 0x00, 0x00, 0xFF];
+        let program = &[0xdead_beef, 0x0500_00FF];
 
         machine
             .input
             .get_mut()
-            .write(format!("Hello World!").as_bytes())
+            .write(format!("Hello World\n").as_bytes()) // This whitespace will be trimmed
             .unwrap();
 
         machine.load(program).unwrap();
         machine.run().unwrap();
 
-        let bytes = <[u8; 16]>::try_from(&machine.ram[4080..=4095]).unwrap();
+        let words = &machine.ram[machine.sp as usize..machine.sp as usize + 4];
 
         // This weird array is the string in reverse order, grouped into triplets,
         // and padded with 0/1 depending on if we're at the end of the string
         assert_eq!(
-            &[
-                0x01, b'l', b'e', b'H', 0x01, b' ', b'o', b'l', 0x01, b'r', b'o', b'W', 0x00, b'!',
-                b'd', b'l'
-            ],
-            &bytes
+            &[0x016c_6548, 0x0120_6f6c, 0x0172_6f57, 0x0001_646c],
+            &words
         );
+        assert_eq!(1024 - 4, machine.sp);
     }
 
     #[test]
     fn test_stprint() {
         let mut machine = Machine {
-            ram: [0; 4096],
-            sp: 4095,
+            ram: [0; 1024],
+            sp: 1024,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[
-            0xde, 0xad, 0xbe, 0xef, 0x05, 0x00, 0x00, 0xFF, 0x40, 0x00, 0x00, 0x04,
-        ];
+        let program = &[0xdead_beef, 0x0500_00FF, 0x4000_0000];
 
         machine
             .input
@@ -461,71 +440,69 @@ mod tests {
         machine.run().unwrap();
 
         let output = machine.output.clone().into_inner();
+        let output_str = String::from_utf8(output).unwrap();
 
-        assert_eq!("Hello World!", String::from_utf8(output).unwrap());
+        assert_eq!("Hello World!", output_str);
     }
 
     #[test]
     fn test_push() {
         let mut machine = Machine {
-            ram: [0; 4096],
-            sp: 4095,
+            ram: [0; 1024],
+            sp: 1024,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xde, 0xad, 0xbe, 0xef, 0xF0, 0x00, 0x00, 0x45];
+        let program = &[0xdead_beef, 0xf000_0045];
 
         machine.load(program).unwrap();
         machine.run().unwrap();
 
-        let bytes = <[u8; 4]>::try_from(&machine.ram[4092..=4095]).unwrap();
-        let word = i32::from_be_bytes(bytes);
+        let word = machine.ram[machine.sp as usize];
 
         assert_eq!(0x45, word);
-        assert_eq!(4091, machine.sp);
+        assert_eq!(1023, machine.sp);
     }
 
     #[test]
     fn test_push_negative() {
         let mut machine = Machine {
-            ram: [0; 4096],
-            sp: 4095,
+            ram: [0; 1024],
+            sp: 1024,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xde, 0xad, 0xbe, 0xef, 0xFF, 0xFF, 0xFF, 0xFC];
+        // Push -4
+        let program = &[0xdead_beef, 0xffff_fffc];
 
         machine.load(program).unwrap();
         machine.run().unwrap();
 
-        let bytes = <[u8; 4]>::try_from(&machine.ram[4092..=4095]).unwrap();
-        let word = i32::from_be_bytes(bytes);
+        let word = i32::from_ne_bytes(machine.ram[machine.sp as usize].to_ne_bytes());
 
         assert_eq!(-4, word);
-        assert_eq!(4091, machine.sp);
+        assert_eq!(1023, machine.sp);
     }
 
     #[test]
     fn test_pop() {
         let mut machine = Machine {
-            ram: [0; 4096],
-            sp: 4095,
+            ram: [0; 1024],
+            sp: 1024,
             pc: 0,
             input: io::Cursor::new(Vec::new()),
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[
-            0xde, 0xad, 0xbe, 0xef, 0xF0, 0x00, 0x00, 0x45, 0x10, 0x00, 0x00, 0x04,
-        ];
+        let program = &[0xdead_beef, 0xf000_0045, 0x1000_0004];
 
         machine.load(program).unwrap();
         machine.run().unwrap();
 
-        assert_eq!(4095, machine.sp);
+        assert_eq!(1024, machine.sp);
     }
 }
