@@ -382,7 +382,7 @@ mod tests {
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xdead_beef, 0x0005_0000, 0x0000_0000];
+        let program = &[0xefbe_adde, 0x0005_0000, 0x0000_0000];
 
         machine.load(program).unwrap();
 
@@ -399,7 +399,7 @@ mod tests {
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xdead_beef, 0x0400_0000];
+        let program = &[0xefbe_adde, 0x0400_0000];
 
         let input: u32 = 0x45;
         machine
@@ -425,7 +425,7 @@ mod tests {
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xdead_beef, 0x0500_00FF];
+        let program = &[0xefbe_adde, 0x0500_00FF];
 
         machine
             .input
@@ -457,7 +457,7 @@ mod tests {
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xdead_beef, 0x0500_00FF, 0x4000_0000];
+        let program = &[0xefbe_adde, 0x0500_00FF, 0x4000_0000];
 
         machine
             .input
@@ -484,7 +484,7 @@ mod tests {
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xdead_beef, 0xf000_0045];
+        let program = &[0xefbe_adde, 0xf000_0045];
 
         machine.load(program).unwrap();
         machine.run().unwrap();
@@ -506,7 +506,7 @@ mod tests {
         };
 
         // Push -4
-        let program = &[0xdead_beef, 0xffff_fffc];
+        let program = &[0xefbe_adde, 0xffff_fffc];
 
         machine.load(program).unwrap();
         machine.run().unwrap();
@@ -527,7 +527,7 @@ mod tests {
             output: io::Cursor::new(Vec::new()),
         };
 
-        let program = &[0xdead_beef, 0xf000_0045, 0x1000_0004];
+        let program = &[0xefbe_adde, 0xf000_0045, 0x1000_0004];
 
         machine.load(program).unwrap();
         machine.run().unwrap();
