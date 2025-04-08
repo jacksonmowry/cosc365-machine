@@ -488,6 +488,28 @@ mod tests {
     }
 
     #[test]
+    fn test_push_negative() {
+        let mut machine = Machine {
+            ram: [0; 4096],
+            sp: 4095,
+            pc: 0,
+            input: io::Cursor::new(Vec::new()),
+            output: io::Cursor::new(Vec::new()),
+        };
+
+        let program = &[0xde, 0xad, 0xbe, 0xef, 0xFF, 0xFF, 0xFF, 0xFC];
+
+        machine.load(program).unwrap();
+        machine.run().unwrap();
+
+        let bytes = <[u8; 4]>::try_from(&machine.ram[4092..=4095]).unwrap();
+        let word = i32::from_be_bytes(bytes);
+
+        assert_eq!(-4, word);
+        assert_eq!(4091, machine.sp);
+    }
+
+    #[test]
     fn test_pop() {
         let mut machine = Machine {
             ram: [0; 4096],
