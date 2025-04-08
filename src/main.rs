@@ -1,3 +1,5 @@
+use std::io::stdin;
+
 fn main() {
     println!("Hello, world!");
 }
@@ -23,6 +25,12 @@ impl Machine {
     }
 
     pub fn run(&mut self) -> Result<(), &'static str> {
+        // If the instruction does not explicitly move the PC you can just perform the action.
+        // If an instruction needs to explicitly move the PC you should:
+        // 1. Calculate the new PC
+        // 2. Perform any action
+        // 3. Set the correct PC value
+        // 4. Call `continue` to avoid the 4 byte step at the bottom of the loop
         loop {
             let instruction = self.fetch();
 
@@ -46,7 +54,19 @@ impl Machine {
                         .copy_from_slice(&from_word.to_be_bytes());
                 }
                 Instruction::Nop() => (),
-                Instruction::Input() => todo!(),
+                Instruction::Input() => {
+                    let mut s = String::new();
+                    stdin().read_line(&mut s).unwrap();
+
+                    if s.starts_with("0x") || s.starts_with("0X") {
+                        // Parse Hex
+
+                    } else if s.starts_with("0b") || s.starts_with("0B") {
+                        // Parse Binary
+                    } else {
+                        // Parse Decimal
+                    }
+                }
                 Instruction::Stinput(_) => todo!(),
                 Instruction::Debug(_) => todo!(),
                 Instruction::Pop(_) => todo!(),
@@ -82,6 +102,8 @@ impl Machine {
                 Instruction::Dump() => todo!(),
                 Instruction::Push(_) => todo!(),
             }
+
+            self.step();
         }
 
         Ok(())
