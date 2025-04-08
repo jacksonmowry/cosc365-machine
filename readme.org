@@ -1,4 +1,4 @@
-#+title: Readme
+#+title: VMach Virtual Machine
 
 * Testing
 #+begin_src shell
