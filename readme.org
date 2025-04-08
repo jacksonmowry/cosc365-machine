@@ -1,0 +1,6 @@
+#+title: Readme
+
+* Testing
+#+begin_src shell
+cargo test
+#+end_src
