@@ -21,7 +21,9 @@ fn main() {
         .collect();
 
     machine.load(&program).unwrap();
-    machine.run().unwrap();
+    let exit_code = machine.run().unwrap();
+
+    std::process::exit(exit_code.into());
 }
 
 struct Machine<R: io::Read, W: io::Write> {
