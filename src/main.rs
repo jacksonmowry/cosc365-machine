@@ -239,7 +239,12 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
             Opcode::Print => todo!(),
             Opcode::Dump => todo!(),
             Opcode::Push => {
-                let val = instruction & 0xFFFFFFF;
+                let mask = 0xF << 28;
+                let mut val = instruction & 0xFFFFFFF;
+
+                if val >> 27 == 1 {
+                    val |= mask;
+                }
 
                 Instruction::Push(val)
             }
