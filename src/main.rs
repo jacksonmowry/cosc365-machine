@@ -1,5 +1,4 @@
 use std::io;
-use std::io::Write;
 
 fn main() {
     // Just an example of it working for now, this will obv change to accept a real file
@@ -97,28 +96,33 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                     s.truncate(max_chars as usize);
 
-                    if s.len() % 3 != 0 {
-                        let count = 3 - (s.len() % 3);
-                        for _i in 0..count {
-                            s.push(1 as u8 as char);
-                        }
-                    }
-
-                    let reversed = s.chars().into_iter().rev().collect::<String>();
-
-                    let push_count = reversed.len() / 3;
-
-                    let s_bytes = reversed.as_bytes();
-                    for i in 0..push_count {
-                        let mut word: u32 = ((s_bytes[i * 3] as u32) << 16)
-                            | ((s_bytes[i * 3 + 1] as u32) << 8)
-                            | (s_bytes[i * 3 + 2] as u32);
-
-                        if i != 0 {
-                            word |= 0x1 << 24;
+                    if s.len() == 0 {
+                        // The user didn't type anything
+                        self.push(0).unwrap();
+                    } else {
+                        if s.len() % 3 != 0 {
+                            let count = 3 - (s.len() % 3);
+                            for _i in 0..count {
+                                s.push(1 as u8 as char);
+                            }
                         }
 
-                        self.push(word)?;
+                        let reversed = s.chars().into_iter().rev().collect::<String>();
+
+                        let push_count = reversed.len() / 3;
+
+                        let s_bytes = reversed.as_bytes();
+                        for i in 0..push_count {
+                            let mut word: u32 = ((s_bytes[i * 3] as u32) << 16)
+                                | ((s_bytes[i * 3 + 1] as u32) << 8)
+                                | (s_bytes[i * 3 + 2] as u32);
+
+                            if i != 0 {
+                                word |= 0x1 << 24;
+                            }
+
+                            self.push(word)?;
+                        }
                     }
                 }
                 Instruction::Debug(_) => todo!(),
@@ -176,7 +180,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::IfGe(_) => todo!(),
                 Instruction::EqZero(offset) => {
                     if self.ram[self.sp as usize] == 0 {
-                        self.pc += offset as i16;
+                        self.pc += offset as i16 >> 2;
                         continue;
                     }
                 }
@@ -392,6 +396,7 @@ enum Instruction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
     fn construct_machine() {
