@@ -420,10 +420,18 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     0b1000 => Instruction::Lsl(), 
                     0b1001 => Instruction::Lsr(), 
                     0b1011 => Instruction::Asr() ,
-                    _ => unreachable!("Not a valid func4 for Opcode 1 ({})", instr),
+                    _ => unreachable!("Not a valid instruction for Opcode 2 ({})", instr),
                 }
             }
-            Opcode::UnaryArithmetic => todo!(),
+            Opcode::UnaryArithmetic => {
+                let instr: u32  = (instruction >> 28) & 0xf;
+                
+                match instr {
+                    0b0000 => Instruction::Neg(), 
+                    0b0001 => Instruction::Not(), 
+                    _ => unreachable!("Not a valid instruction for Opcode 3 ({})", instr),
+                }
+            }
             Opcode::StringPrint => {
                 let offset = instruction & 0xFFFFFFF;
 
@@ -468,7 +476,11 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     _ => unreachable!("No unary if with this func2"),
                 }
             }
-            Opcode::Dup => todo!(),
+            Opcode::Dup => {
+                let offset = instruction & 0xFFFFFFF;
+                Instruction::Dup(offset as i32)
+            }
+
             Opcode::Print => todo!(),
             Opcode::Dump => todo!(),
             Opcode::Push => {
