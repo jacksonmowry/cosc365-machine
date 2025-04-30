@@ -125,26 +125,91 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                         }
                     }
                 }
-                Instruction::Debug(_) => todo!(),
+                Instruction::Debug(value) => {
+                    eprintln!("Debug: 0x{:06X}", value);
+                }
                 Instruction::Pop(offset) => {
                     self.sp += offset as i16 >> 2;
                     if self.sp >= 1024 {
                         self.sp = 1024;
                     }
                 }
-                Instruction::Add() => todo!(),
-                Instruction::Sub() => todo!(),
-                Instruction::Mul() => todo!(),
-                Instruction::Div() => todo!(),
-                Instruction::Rem() => todo!(),
-                Instruction::And() => todo!(),
-                Instruction::Or() => todo!(),
-                Instruction::Xor() => todo!(),
-                Instruction::Lsl() => todo!(),
-                Instruction::Lsr() => todo!(),
-                Instruction::Asr() => todo!(),
-                Instruction::Neg() => todo!(),
-                Instruction::Not() => todo!(),
+                Instruction::Add() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(a.wrapping_add(b))?;
+                }
+                Instruction::Sub() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(a.wrapping_sub(b))?;
+                }
+                Instruction::Mul() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(a.wrapping_mul(b))?;
+                }
+                Instruction::Div() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(if b == 0 { 0 } else { a / b })?;
+                }
+                Instruction::Rem() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(if b == 0 { 0 } else { a % b })?;
+                }
+                Instruction::And() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(a & b)?;
+                }
+                Instruction::Or() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(a | b)?;
+                }
+                Instruction::Xor() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(a ^ b)?;
+                }
+                Instruction::Lsl() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(a << b)?;
+                }
+                Instruction::Lsr() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(a >> b)?;
+                }
+                Instruction::Asr() => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    self.sp += 2;
+                    self.push(((a as i32) >> b) as u32)?;
+                }
+                Instruction::Neg() => {
+                    let a = self.ram[self.sp as usize];
+                    self.sp += 1;
+                    self.push((-(a as i32)) as u32)?;
+                }
+                Instruction::Not() => {
+                    let a = self.ram[self.sp as usize];
+                    self.sp += 1;
+                    self.push(!a)?;
+                }
                 Instruction::Stprint(offset) => {
                     let mut actual_offset = (self.sp + ((offset as i16) >> 2)) as usize;
 
@@ -169,27 +234,121 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                     self.output.flush().unwrap();
                 }
-                Instruction::Call(_) => todo!(),
-                Instruction::Return(_) => todo!(),
-                Instruction::Goto(_) => todo!(),
-                Instruction::IfEq(_) => todo!(),
-                Instruction::IfNe(_) => todo!(),
-                Instruction::IfLt(_) => todo!(),
-                Instruction::IfGt(_) => todo!(),
-                Instruction::IfLe(_) => todo!(),
-                Instruction::IfGe(_) => todo!(),
+                Instruction::Call(offset) => {
+                    self.push((self.pc + 1) as u32)?;
+                    self.pc += (offset >> 2) as i16;
+                    continue;
+                }
+                Instruction::Return(offset) => {
+                    let ret_addr = self.ram[self.sp as usize] as i16;
+                    self.sp += (offset >> 2) as i16 + 1;
+                    self.pc = ret_addr;
+                    continue;
+                }
+                Instruction::Goto(offset) => {
+                    self.pc += (offset >> 2) as i16;
+                    continue;
+                }
+                Instruction::IfEq(offset) => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    if a == b {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                    self.sp += 2;
+                }
+                Instruction::IfNe(offset) => {
+                    let b = self.ram[self.sp as usize];
+                    let a = self.ram[self.sp as usize + 1];
+                    if a != b {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                    self.sp += 2;
+                }
+                Instruction::IfLt(offset) => {
+                    let b = self.ram[self.sp as usize] as i32;
+                    let a = self.ram[self.sp as usize + 1] as i32;
+                    if a < b {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                    self.sp += 2;
+                }
+                Instruction::IfGt(offset) => {
+                    let b = self.ram[self.sp as usize] as i32;
+                    let a = self.ram[self.sp as usize + 1] as i32;
+                    if a > b {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                    self.sp += 2;
+                }
+                Instruction::IfLe(offset) => {
+                    let b = self.ram[self.sp as usize] as i32;
+                    let a = self.ram[self.sp as usize + 1] as i32;
+                    if a <= b {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                    self.sp += 2;
+                }
+                Instruction::IfGe(offset) => {
+                    let b = self.ram[self.sp as usize] as i32;
+                    let a = self.ram[self.sp as usize + 1] as i32;
+                    if a >= b {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                    self.sp += 2;
+                }
                 Instruction::EqZero(offset) => {
                     if self.ram[self.sp as usize] == 0 {
                         self.pc += offset as i16 >> 2;
                         continue;
                     }
                 }
-                Instruction::NeZero(_) => todo!(),
-                Instruction::LtZero(_) => todo!(),
-                Instruction::GeZero(_) => todo!(),
-                Instruction::Dup(_) => todo!(),
-                Instruction::Print(_, _) => todo!(),
-                Instruction::Dump() => todo!(),
+                Instruction::NeZero(offset) => {
+                    let val = self.ram[self.sp as usize];
+                    if val != 0 {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                }
+                Instruction::LtZero(offset) => {
+                    let val = self.ram[self.sp as usize] as i32;
+                    if val < 0 {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                }
+                Instruction::GeZero(offset) => {
+                    let val = self.ram[self.sp as usize] as i32;
+                    if val >= 0 {
+                        self.pc += (offset >> 2) as i16;
+                        continue;
+                    }
+                }
+                Instruction::Dup(offset) => {
+                    let val = self.ram[(self.sp + ((offset as i16) >> 2)) as usize];
+                    self.push(val)?;
+                }
+                Instruction::Print(offset, fmt) => {
+                    let val = self.ram[(self.sp + ((offset as i16) >> 2)) as usize];
+                    match fmt {
+                        0 => println!("{}", val),
+                        1 => println!("0x{:X}", val),
+                        2 => println!("0b{:b}", val),
+                        3 => println!("0o{:o}", val),
+                        _ => println!("{}", val),
+                    }
+                }
+                Instruction::Dump() => {
+                    for i in self.sp..1024 {
+                        println!("{:04x}: {:08x}", i, self.ram[i as usize]);
+                    }
+                }
                 Instruction::Push(val) => self.push(val).unwrap(),
             }
 
