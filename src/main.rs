@@ -406,7 +406,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::Pop(offset)
             }
             Opcode::BinaryArithmetic => {
-                let instr: u8  = (instruction >> 28) & 0xf;
+                let instr: u32  = (instruction >> 28) & 0xf;
 
                 match instr {
                     0b0000 => Instruction::Add(),
