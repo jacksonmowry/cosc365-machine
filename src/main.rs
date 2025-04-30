@@ -415,7 +415,25 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
             Opcode::Call => todo!(),
             Opcode::Return => todo!(),
             Opcode::Goto => todo!(),
-            Opcode::BinaryIf => todo!(),
+            Opcode::BinaryIf => {
+                let func2 = (instruction >> 25) & 0b111;
+                let mut offset = instruction as i32 & 0xffffff;
+
+                if offset >> 23 == 1 {
+                    let mask = 0xff << 24;
+                    offset |= mask;
+                }
+
+                match func2 {
+                    0b000 => Instruction::IfEq(offset),
+                    0b001 => Instruction::IfNe(offset),
+                    0b010 => Instruction::IfLt(offset),
+                    0b011 => Instruction::IfGt(offset),
+                    0b100 => Instruction::IfLe(offset),
+                    0b101 => Instruction::IfGe(offset),
+                    _ => unreachable!("No binary if with this func2"),
+                }
+            }
             Opcode::UnaryIf => {
                 let func2 = (instruction >> 25) & 0b11;
                 let mut offset = instruction as i32 & 0xffffff;
