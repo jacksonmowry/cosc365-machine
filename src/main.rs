@@ -407,18 +407,18 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
             }
             Opcode::BinaryArithmetic => {
                 let instr: u8  = (instruction >> 28) & 0xf;
-                
+
                 match instr {
-                    0b0000 => Instruction::Add(), 
-                    0b0001 => Instruction::Sub(), 
-                    0b0010 => Instruction::Mul(), 
-                    0b0011 => Instruction::Div(), 
-                    0b0100 => Instruction::Rem(), 
-                    0b0101 => Instruction::And(), 
-                    0b0110 => Instruction::Or(), 
-                    0b0111 => Instruction::Xor(), 
-                    0b1000 => Instruction::Lsl(), 
-                    0b1001 => Instruction::Lsr(), 
+                    0b0000 => Instruction::Add(),
+                    0b0001 => Instruction::Sub(),
+                    0b0010 => Instruction::Mul(),
+                    0b0011 => Instruction::Div(),
+                    0b0100 => Instruction::Rem(),
+                    0b0101 => Instruction::And(),
+                    0b0110 => Instruction::Or(),
+                    0b0111 => Instruction::Xor(),
+                    0b1000 => Instruction::Lsl(),
+                    0b1001 => Instruction::Lsr(),
                     0b1011 => Instruction::Asr() ,
                     _ => unreachable!("Not a valid func4 for Opcode 1 ({})", instr),
                 }
@@ -429,9 +429,21 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                 Instruction::Stprint(offset as i32)
             }
-            Opcode::Call => todo!(),
-            Opcode::Return => todo!(),
-            Opcode::Goto => todo!(),
+            Opcode::Call => {
+                let offset = instruction & 0xFFFFFFF;
+
+                Instruction::Call(offset as i32)
+            }
+            Opcode::Return => {
+                let offset = instruction & 0xFFFFFFF;
+
+                Instruction::Return(offset as i32)
+            }
+            Opcode::Goto => {
+                let offset = instruction & 0xFFFFFFF;
+
+                Instruction::Goto(offset as i32)
+            }
             Opcode::BinaryIf => {
                 let func2 = (instruction >> 25) & 0b111;
                 let mut offset = instruction as i32 & 0xffffff;
