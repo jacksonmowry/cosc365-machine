@@ -405,7 +405,24 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                 Instruction::Pop(offset)
             }
-            Opcode::BinaryArithmetic => todo!(),
+            Opcode::BinaryArithmetic => {
+                let instr: u8  = (instruction >> 28) & 0xf;
+                
+                match instr {
+                    0b0000 => Instruction::Add(), 
+                    0b0001 => Instruction::Sub(), 
+                    0b0010 => Instruction::Mul(), 
+                    0b0011 => Instruction::Div(), 
+                    0b0100 => Instruction::Rem(), 
+                    0b0101 => Instruction::And(), 
+                    0b0110 => Instruction::Or(), 
+                    0b0111 => Instruction::Xor(), 
+                    0b1000 => Instruction::Lsl(), 
+                    0b1001 => Instruction::Lsr(), 
+                    0b1011 => Instruction::Asr() ,
+                    _ => unreachable!("Not a valid func4 for Opcode 1 ({})", instr),
+                }
+            }
             Opcode::UnaryArithmetic => todo!(),
             Opcode::StringPrint => {
                 let offset = instruction & 0xFFFFFFF;
