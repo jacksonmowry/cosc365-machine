@@ -425,10 +425,10 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
             }
             Opcode::UnaryArithmetic => {
                 let instr: u32  = (instruction >> 28) & 0xf;
-                
+
                 match instr {
-                    0b0000 => Instruction::Neg(), 
-                    0b0001 => Instruction::Not(), 
+                    0b0000 => Instruction::Neg(),
+                    0b0001 => Instruction::Not(),
                     _ => unreachable!("Not a valid instruction for Opcode 3 ({})", instr),
                 }
             }
@@ -493,8 +493,15 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::Dup(offset as i32)
             }
 
-            Opcode::Print => todo!(),
-            Opcode::Dump => todo!(),
+            Opcode::Print => {
+                let fmt = instruction & 0b11;
+                let offset = (instruction & 0xFFFFFFF) >> 2;
+
+                Instruction::Print(offset as i32, fmt as i8)
+            }
+            Opcode::Dump => {
+                Instruction::Dump()
+            }
             Opcode::Push => {
                 let mask = 0xF << 28;
                 let mut val = instruction & 0xFFFFFFF;
