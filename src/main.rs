@@ -78,6 +78,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     break;
                 }
                 Instruction::Swap(from, to) => {
+                    println!("SP {}, From {}, To {}", self.sp, from, to);
                     let tmp = self.ram[(self.sp + (from >> 2)) as usize];
                     self.ram[(self.sp + (from >> 2)) as usize] =
                         self.ram[(self.sp + (to >> 2)) as usize];
@@ -144,6 +145,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 }
                 Instruction::Pop(offset) => {
                     self.sp += (offset >> 2) as i16;
+                    println!("SP from POP: {}", self.sp);
                     if self.sp >= 1024 {
                         self.sp = 1024;
                     }
@@ -389,6 +391,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
         }
 
         self.sp -= 1;
+        println!("SP from PUSH: {}", self.sp);
         self.ram[self.sp as usize] = word;
 
         Ok(())
@@ -406,10 +409,17 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                 match func4 {
                     0b0000 => Instruction::Exit(instruction as u8 & 0xf),
-                    0b0001 => Instruction::Swap(
-                        (instruction >> 12) as i16 & 0xFFF,
-                        instruction as i16 & 0xFFF,
-                    ),
+                    0b0001 =>  {
+                        let mut from = (instruction >> 12) as i16 & 0xFFF;
+                        if from >> 11 & 0b1 == 1 {
+                            from = (from as i32 | (0xF000 as i32)) as i16;
+                        }
+                        let mut to = instruction as i16 & 0xFFF;
+                        if to >> 11 & 0b1 == 1 {
+                            to = (to as i32 | (0xF000 as i32)) as i16;
+                        }
+                        Instruction::Swap(from, to)
+                    }
                     0b0010 => Instruction::Nop(),
                     0b0100 => Instruction::Input(),
                     0b0101 => Instruction::Stinput(instruction & 0xFFFFFF),
