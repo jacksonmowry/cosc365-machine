@@ -1,6 +1,20 @@
 use std::io;
+use std::io::Read;
+use std::fs::File;
+use std::env::args;
 
 fn main() {
+    let a: Vec<String> = args().collect();
+    if a.len() != 2 {
+        println!("Usage: {} <file.v>", &a[0]);
+        return;
+    }
+
+    let mut fl = File::open(&a[1]).expect("No such file or directory");
+    let mut buffer = Vec::new();
+    fl.read_to_end(&mut buffer).expect("Unable to read file");
+
+
     // Just an example of it working for now, this will obv change to accept a real file
     let mut machine = Machine {
         ram: [0; 1024],
@@ -10,7 +24,7 @@ fn main() {
         output: io::stdout(),
     };
 
-    let binary = include_bytes!("../marz/stinput.v");
+    let binary = &buffer;
 
     // This takes the [u8] that is the file, chunks it into quads,
     // then returns an array of u32 values
