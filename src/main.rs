@@ -1,7 +1,7 @@
+use std::env::args;
+use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::fs::File;
-use std::env::args;
 
 fn main() {
     let a: Vec<String> = args().collect();
@@ -13,7 +13,6 @@ fn main() {
     let mut fl = File::open(&a[1]).expect("No such file or directory");
     let mut buffer = Vec::new();
     fl.read_to_end(&mut buffer).expect("Unable to read file");
-
 
     // Just an example of it working for now, this will obv change to accept a real file
     let mut machine = Machine {
@@ -78,7 +77,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     break;
                 }
                 Instruction::Swap(from, to) => {
-                    println!("SP {}, From {}, To {}", self.sp, from, to);
                     let tmp = self.ram[(self.sp + (from >> 2)) as usize];
                     self.ram[(self.sp + (from >> 2)) as usize] =
                         self.ram[(self.sp + (to >> 2)) as usize];
@@ -99,8 +97,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                             .expect("Unable to parse binary literal");
                     } else {
                         // Parse Decimal
-                        word =
-                            s.parse::<i32>().expect("Unable to parse decimal literal") as u32;
+                        word = s.parse::<i32>().expect("Unable to parse decimal literal") as u32;
                     }
 
                     self.push(word)?;
@@ -145,11 +142,9 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 }
                 Instruction::Pop(offset) => {
                     self.sp += (offset >> 2) as i16;
-                    println!("SP from POP: {}", self.sp);
                     if self.sp >= 1024 {
                         self.sp = 1024;
-                    }
-                    else if self.sp < 0 {
+                    } else if self.sp < 0 {
                         self.sp = 0;
                     }
                 }
@@ -275,7 +270,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                         self.pc += (offset >> 2) as i16;
                         continue;
                     }
-                    self.sp += 2;
                 }
                 Instruction::IfNe(offset) => {
                     let b = self.ram[self.sp as usize];
@@ -284,7 +278,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                         self.pc += (offset >> 2) as i16;
                         continue;
                     }
-                    self.sp += 2;
                 }
                 Instruction::IfLt(offset) => {
                     let b = self.ram[self.sp as usize] as i32;
@@ -293,7 +286,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                         self.pc += (offset >> 2) as i16;
                         continue;
                     }
-                    self.sp += 2;
                 }
                 Instruction::IfGt(offset) => {
                     let b = self.ram[self.sp as usize] as i32;
@@ -302,7 +294,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                         self.pc += (offset >> 2) as i16;
                         continue;
                     }
-                    self.sp += 2;
                 }
                 Instruction::IfLe(offset) => {
                     let b = self.ram[self.sp as usize] as i32;
@@ -311,7 +302,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                         self.pc += (offset >> 2) as i16;
                         continue;
                     }
-                    self.sp += 2;
                 }
                 Instruction::IfGe(offset) => {
                     let b = self.ram[self.sp as usize] as i32;
@@ -320,7 +310,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                         self.pc += (offset >> 2) as i16;
                         continue;
                     }
-                    self.sp += 2;
                 }
                 Instruction::EqZero(offset) => {
                     if self.ram[self.sp as usize] == 0 {
@@ -391,7 +380,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
         }
 
         self.sp -= 1;
-        println!("SP from PUSH: {}", self.sp);
         self.ram[self.sp as usize] = word;
 
         Ok(())
@@ -409,7 +397,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                 match func4 {
                     0b0000 => Instruction::Exit(instruction as u8 & 0xf),
-                    0b0001 =>  {
+                    0b0001 => {
                         let mut from = (instruction >> 12) as i16 & 0xFFF;
                         if from >> 11 & 0b1 == 1 {
                             from = (from as i32 | (0xF000 as i32)) as i16;
@@ -436,7 +424,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::Pop(offset)
             }
             Opcode::BinaryArithmetic => {
-                let instr: u32  = (instruction >> 24) & 0xf;
+                let instr: u32 = (instruction >> 24) & 0xf;
 
                 match instr {
                     0b0000 => Instruction::Add(),
@@ -449,12 +437,12 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     0b0111 => Instruction::Xor(),
                     0b1000 => Instruction::Lsl(),
                     0b1001 => Instruction::Lsr(),
-                    0b1011 => Instruction::Asr() ,
+                    0b1011 => Instruction::Asr(),
                     _ => unreachable!("Not a valid instruction for Opcode 2 ({})", instr),
                 }
             }
             Opcode::UnaryArithmetic => {
-                let instr: u32  = (instruction >> 24) & 0xf;
+                let instr: u32 = (instruction >> 24) & 0xf;
 
                 match instr {
                     0b0000 => Instruction::Neg(),
@@ -529,9 +517,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
                 Instruction::Print(offset as i32, fmt as i8)
             }
-            Opcode::Dump => {
-                Instruction::Dump()
-            }
+            Opcode::Dump => Instruction::Dump(),
             Opcode::Push => {
                 let mask = 0xF << 28;
                 let mut val = instruction & 0xFFFFFFF;
