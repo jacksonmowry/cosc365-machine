@@ -85,7 +85,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 }
                 Instruction::Nop() => (),
                 Instruction::Input() => {
-                    let s = self.read_line()?;
+                    let s = self.read_line()?.trim().to_string();
                     let word: u32;
 
                     if s.starts_with("0x") || s.starts_with("0X") {
@@ -99,7 +99,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     } else {
                         // Parse Decimal
                         word =
-                            u32::from_str_radix(&s, 10).expect("Unable to parse decimal literal");
+                            s.parse::<i32>().expect("Unable to parse decimal literal") as u32;
                     }
 
                     self.push(word)?;
@@ -420,7 +420,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 Instruction::Pop(offset)
             }
             Opcode::BinaryArithmetic => {
-                let instr: u32  = (instruction >> 28) & 0xf;
+                let instr: u32  = (instruction >> 24) & 0xf;
 
                 match instr {
                     0b0000 => Instruction::Add(),
@@ -438,7 +438,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 }
             }
             Opcode::UnaryArithmetic => {
-                let instr: u32  = (instruction >> 28) & 0xf;
+                let instr: u32  = (instruction >> 24) & 0xf;
 
                 match instr {
                     0b0000 => Instruction::Neg(),
