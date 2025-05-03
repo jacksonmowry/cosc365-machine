@@ -343,7 +343,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     self.push(val)?;
                 }
                 Instruction::Print(offset, fmt) => {
-                    let val = self.ram[(self.sp + ((offset as i16) >> 2)) as usize];
+                    let val = self.ram[(self.sp + (offset as i16)) as usize];
                     match fmt {
                         0 => println!("{}", val as i32),
                         1 => println!("0x{:X}", val),
@@ -381,7 +381,6 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
         self.sp -= 1;
         self.ram[self.sp as usize] = word;
-
         Ok(())
     }
 
@@ -416,10 +415,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                 }
             }
             Opcode::Pop => {
-                let mut offset = (instruction & 0xFFFFFFF) as i32;
-                if (offset & (1 << 27)) != 0 {
-                    offset |= !0x0FFFFFFF;
-                }
+                let offset = instruction & 0xFFFFFFF;
 
                 Instruction::Pop(offset)
             }
@@ -513,8 +509,11 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
 
             Opcode::Print => {
                 let fmt = instruction & 0b11;
-                let offset = (instruction & 0xFFFFFFF) >> 2;
-
+                let mut offset = (instruction & 0xFFFFFFF) >> 2;
+                // offset can be signed
+                if offset >> 25 == 0b1 {
+                    offset |= 0xFC000000;
+                }
                 Instruction::Print(offset as i32, fmt as i8)
             }
             Opcode::Dump => Instruction::Dump(),
@@ -600,7 +599,7 @@ enum Instruction {
     Input(),
     Stinput(u32),
     Debug(u32),
-    Pop(i32),
+    Pop(u32),
     Add(),
     Sub(),
     Mul(),
