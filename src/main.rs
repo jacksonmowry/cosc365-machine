@@ -77,10 +77,10 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     break;
                 }
                 Instruction::Swap(from, to) => {
-                    let tmp = self.ram[(self.sp + (from >> 2)) as usize];
-                    self.ram[(self.sp + (from >> 2)) as usize] =
-                        self.ram[(self.sp + (to >> 2)) as usize];
-                    self.ram[(self.sp + (to >> 2)) as usize] = tmp;
+                    let tmp = self.ram[(self.sp + from) as usize];
+                    self.ram[(self.sp + from) as usize] =
+                        self.ram[(self.sp + to) as usize];
+                    self.ram[(self.sp + to) as usize] = tmp;
                 }
                 Instruction::Nop() => (),
                 Instruction::Input() => {
