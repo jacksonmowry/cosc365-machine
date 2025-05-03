@@ -254,7 +254,7 @@ impl<R: io::Read, W: io::Write> Machine<R, W> {
                     continue;
                 }
                 Instruction::Return(offset) => {
-                    let ret_addr = self.ram[self.sp as usize] as i16;
+                    let ret_addr = self.ram[(self.sp + (offset >> 2) as i16) as usize] as i16;
                     self.sp += (offset >> 2) as i16 + 1;
                     self.pc = ret_addr;
                     continue;
